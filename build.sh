@@ -10,12 +10,27 @@ sudo apt-get install -y bc cpio ccache gcc-aarch64-linux-gnu binutils-aarch64-li
 read -p "Enter build type (aosp/oem): " buildtype
 buildtype_lower=$(echo "$buildtype" | tr '[:upper:]' '[:lower:]')
 
-# Set zip name
+# Ask for KernelSU
+read -p "Include KernelSU? (y/n): " ksu_response
+ksu_lower=$(echo "$ksu_response" | tr '[:upper:]' '[:lower:]')
+
+# Set prefix based on build type
 if [[ "$buildtype_lower" == "aosp" ]]; then
-    ZIPNAME="AOSP-MeMeDo-sweet_k6a-$(date '+%Y%m%d').zip"
+    zip_prefix="AOSP"
 else
-    ZIPNAME="MIUI-OOS-MeMeDo-sweet_k6a-$(date '+%Y%m%d').zip"
+    zip_prefix="MIUI-OOS"
 fi
+
+# Add KSU to prefix if selected
+if [[ "$ksu_lower" == "y" || "$ksu_lower" == "yes" ]]; then
+    echo -e "\n🔧 Setting up KernelSU..."
+    curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs-1.5.7
+    zip_prefix="${zip_prefix}_KSU"
+fi
+
+# Final ZIP name
+ZIPNAME="${zip_prefix}-MeMeDo-sweet_k6a-$(date '+%Y%m%d').zip"
+
 
 # Download Clang and GCC toolchains
 if [ ! -d clang ]; then
