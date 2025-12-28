@@ -7,60 +7,64 @@ jobs:
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
-      
-    - name: Prepare timezone 
+
+    - name: Prepare timezone
       run: |
             echo "BUILD_TIME=$(TZ=Asia/Jakarta date "+%d%m%Y-%H%M")" >> $GITHUB_ENV
             sudo rm /etc/localtime
             sudo ln -s /usr/share/zoneinfo/Asia/Jakarta /etc/localtime
-        
+
     - name: Install Dependencies
       run: |
-            sudo apt update -y
-            sudo apt install bc cpio flex bison aptitude git python-is-python3 tar perl wget curl lz4 -y
-            sudo apt install libssl-dev -y
-        
-    - name: Fetch Toolchains 
+            sudo apt -yqq update
+            sudo apt -yqq install git make bc bison openssl curl zip kmod cpio flex libelf-dev libssl-dev libtfm-dev wget device-tree-compiler ca-certificates python3 binutils binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi xz-utils
+
+    - name: Fetch Toolchains
       run: |
-            mkdir clang && curl https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r547379.tar.gz -RLO && tar -C clang/ -xf clang-*.tar.gz
-            git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc64
-            git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 gcc32
-                                    
-    - name: Fetch SukiSU
+            mkdir -p "$HOME/clang"
+            git clone https://github.com/KiTTYsh/android_prebuilts_clang_host_linux-x86_clang-r547379.git "$HOME/clang"
+    - name: Fetch KSUN
       run: |
-            curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs-dev
-                                                         
+            git clone -b main https://github.com/rsuntk/KernelSU.git KernelSU
     - name: Build
       run: |
+            export PATH="$HOME/clang/bin:$PATH"
+            export KBUILD_COMPILER_STRING=$("$HOME"/clang/bin/clang --version | head -n 1 | perl -pe 's/\(http.*?\)//gs' | sed -e 's/  */ /g' -e 's/[[:space:]]*$//')
             export ARCH=arm64
-            export PATH="${PWD}/clang/bin:${PWD}gcc64/bin:${PWD}gcc32/bin:${PATH}"
-            export KBUILD_BUILD_USER=build-user
-            export KBUILD_BUILD_HOST=build-host
-            export KBUILD_COMPILER_STRING="${PWD}/clang"           
-            export LLVM=1 
-            export LLVM_IAS=1
-            export CLANG_TRIPLE=aarch64-linux-gnu-
-            export CROSS_COMPILE=aarch64-linux-android-
-            export CROSS_COMPILE_COMPAT=arm-linux-androideabi-             
-            make O=out sweet_defconfig 
-            make -j$(nproc --all) O=out CC=clang                   
+            export SUBARCH=arm64
+            export HEADER_ARCH=arm64
+            export KBUILD_UILD_HOST="Ubuntu"
+            export KBUILD_BUILD_USER="Keinamvy"
+            make O=out sweet_defconfig
+            make -j$(nproc --all) O=out \
+                              ARCH=arm64 \
+                              LLVM=1 \
+                              LLVM_IAS=1 \
+                              AR=llvm-ar \
+                              NM=llvm-nm \
+                              LD=ld.lld \
+                              OBJCOPY=llvm-objcopy \
+                              OBJDUMP=llvm-objdump \
+                              STRIP=llvm-strip \
+                              CC=clang \
+                              CLANG_TRIPLE=aarch64-linux-gnu- \
+                              CROSS_COMPILE=aarch64-linux-android- \
+                              CROSS_COMPILE_ARM32=arm-linux-androideabi-  2>&1 | tee error.log
             mv out/.config out/sweet_defconfig.txt
-           
-    - name: Upload defconfig 
+    - name: Upload defconfig
       uses: actions/upload-artifact@v4
       with:
         name: defconfig-${{ env.BUILD_TIME }}
         path: out/sweet_defconfig.txt
-
     - name: Fetch Anykernel3
       run: |
-            git clone --depth=1 https://github.com/miyu-xzy/anykernel3 -b main AnyKernel3 
+            git clone --depth=1 https://github.com/MiDoNaSR545/anykernel3 -b main AnyKernel3
             cp out/arch/arm64/boot/Image.gz AnyKernel3/Image.gz
             cp out/arch/arm64/boot/dtbo.img AnyKernel3/dtbo.img
             cp out/arch/arm64/boot/dtb.img AnyKernel3/dtb.img
-                    
+
     - name: Upload Kernel
       uses: actions/upload-artifact@v4
       with:
-        name: sweet-MIUI-${{ env.BUILD_TIME }}
+        name: MeMeDo-MIUI-${{ env.BUILD_TIME }}
         path: AnyKernel3/*
